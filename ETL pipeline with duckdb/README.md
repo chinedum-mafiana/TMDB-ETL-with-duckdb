@@ -2,7 +2,7 @@
 
 A simple, idempotent ETL (Extract, Transform, Load) pipeline built in Python and DuckDB that ingests movie metadata from The Movie Database (TMDB) API, cleans and structures the records, and loads them into a high-performance local data warehouse. 
 
-To do: dockerize and add metabase for visualization
+To do: Add TV shows, dockerize and add metabase for visualization
 
 ---
 
