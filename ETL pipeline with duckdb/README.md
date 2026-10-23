@@ -7,6 +7,7 @@ To do: dockerize and add metabase for visualization
 
 # Project Architecture
 
+```text
 tmdb_project/
 │
 ├── etl/
