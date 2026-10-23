@@ -23,4 +23,4 @@ Tech Stack
 Language: Python
 Data Processing: Pandas
 Data Warehouse: DuckDB 
-Data Source: TMDB API
+Data Source: TMDB API 
