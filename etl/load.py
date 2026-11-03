@@ -1,6 +1,6 @@
 import pandas as pd
 import duckdb
-from etl.transform import transform_movie_details
+from etl.extract_and_transform import *
 
 dw_name = "movies_warehouse.duckdb"
 
