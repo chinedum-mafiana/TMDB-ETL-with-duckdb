@@ -9,7 +9,7 @@ It also includes an **interactive Streamlit web application** for browsing table
 ## Project Architecture
 
 ```text
-tmdb_project/
+tmdb-etl-with-duckdb/
 │
 ├── etl/
 │   ├── extract.py      # Fetches raw data from TMDB API
@@ -20,7 +20,7 @@ tmdb_project/
 ├── movies_warehouse.duckdb             # Local DuckDB database file
 ├── main.py                             # Pipeline orchestration script
 └── README.md
-
+```
 
 Tech Stack
 Language: Python
