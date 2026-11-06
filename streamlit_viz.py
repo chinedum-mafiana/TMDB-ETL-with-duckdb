@@ -1,137 +1,280 @@
-import streamlit as st
 import duckdb
 import pandas as pd
 import plotly.express as px
+import streamlit as st
 
-# Set up Streamlit page layout
-st.set_page_config(page_title="TMDb Movie Analytics", page_icon="🎬", layout="wide")
-
-st.title("🎬 TMDb Movie Analytics Dashboard")
-st.markdown("Explore box-office performance, financial returns, and temporal trends powered by DuckDB and Streamlit.")
-
-# 1. Cached DuckDB Connection (Singleton resource best practice)
-@st.cache_resource
-def get_duckdb_connection():
-    # Connect to your local DuckDB file containing the TMDb star schema
-    conn = duckdb.connect("tmdb.duckdb", read_only=True)
-    return conn
-
-conn = get_duckdb_connection()
-
-# 2. Sidebar Filters
-st.sidebar.header("🔍 Filter Options")
-
-# Fetch available genres dynamically
-genres_df = conn.execute("SELECT DISTINCT genre_name FROM dim_genre ORDER BY genre_name").fetchdf()
-selected_genre = st.sidebar.selectbox("Select Genre", options=["All Genres"] + list(genres_df['genre_name']))
-
-# Fetch year range dynamically
-years = conn.execute("SELECT MIN(release_year), MAX(release_year) FROM dim_movie").fetchone()
-min_year, max_year = int(years[0] or 1970), int(years[1] or 2026)
-year_range = st.sidebar.slider("Release Year Range", min_year, max_year, (2000, max_year))
-
-# Build dynamic SQL filter clause
-where_clauses = [f"m.release_year BETWEEN {year_range[0]} AND {year_range[1]}"]
-if selected_genre != "All Genres":
-    where_clauses.append(f"g.genre_name = '{selected_genre}'")
-
-where_sql = " WHERE " + " AND ".join(where_clauses)
-
-# 3. Top Metrics Summary Row
-col1, col2, col3 = st.columns(3)
-
-metrics_query = f"""
-    SELECT 
-        COUNT(DISTINCT m.movie_id) as total_movies,
-        AVG(m.budget) as avg_budget,
-        AVG(m.revenue) as avg_revenue
-    FROM dim_movie m
-    LEFT JOIN fact_movie_genres fg ON m.movie_id = fg.movie_id
-    LEFT JOIN dim_genre g ON fg.genre_id = g.genre_id
-    {where_sql}
-"""
-metrics_df = conn.execute(metrics_query).fetchdf()
-
-with col1:
-    st.metric("Total Movies", f"{metrics_df['total_movies'].iloc[0]:,}")
-with col2:
-    st.metric("Average Budget", f"${metrics_df['avg_budget'].iloc[0]:,.0f}" if pd.notnull(metrics_df['avg_budget'].iloc[0]) else "$0")
-with col3:
-    st.metric("Average Revenue", f"${metrics_df['avg_revenue'].iloc[0]:,.0f}" if pd.notnull(metrics_df['avg_revenue'].iloc[0]) else "$0")
-
-st.markdown("---")
-
-# 4. Visualizations Section (Row 1)
-row1_col1, row1_col2 = st.columns(2)
-
-with row1_col1:
-    st.subheader("Budget vs. Revenue (ROI Scatter)")
-    scatter_query = f"""
-        SELECT m.title, m.budget, m.revenue, m.vote_average, m.release_year
-        FROM dim_movie m
-        LEFT JOIN fact_movie_genres fg ON m.movie_id = fg.movie_id
-        LEFT JOIN dim_genre g ON fg.genre_id = g.genre_id
-        {where_sql} AND m.budget > 0 AND m.revenue > 0
-        LIMIT 1500
-    """
-    df_scatter = conn.execute(scatter_query).fetchdf()
-    
-    fig_scatter = px.scatter(
-        df_scatter, 
-        x="budget", 
-        y="revenue", 
-        color="vote_average",
-        hover_name="title",
-        log_x=True, 
-        log_y=True,
-        labels={"budget": "Budget (USD, Log)", "revenue": "Revenue (USD, Log)", "vote_average": "Rating"},
-        color_continuous_scale="Viridis"
-    )
-    st.plotly_chart(fig_scatter, use_container_width=True)
-
-with row1_col2:
-    st.subheader("Average Revenue Trend Over Time")
-    trend_query = f"""
-        SELECT m.release_year, AVG(m.revenue) as avg_revenue
-        FROM dim_movie m
-        LEFT JOIN fact_movie_genres fg ON m.movie_id = fg.movie_id
-        LEFT JOIN dim_genre g ON fg.genre_id = g.genre_id
-        {where_sql} AND m.release_year IS NOT NULL AND m.revenue > 0
-        GROUP BY m.release_year
-        ORDER BY m.release_year
-    """
-    df_trend = conn.execute(trend_query).fetchdf()
-    
-    fig_trend = px.line(
-        df_trend, 
-        x="release_year", 
-        y="avg_revenue",
-        markers=True,
-        labels={"release_year": "Release Year", "avg_revenue": "Average Revenue (USD)"}
-    )
-    st.plotly_chart(fig_trend, use_container_width=True)
-
-# 5. Full-Width Visualizations (Row 2)
-st.subheader("Top Genres by Total Box Office Revenue")
-genre_bar_query = """
-    SELECT g.genre_name, SUM(m.revenue) as total_revenue
-    FROM dim_movie m
-    JOIN fact_movie_genres fg ON m.movie_id = fg.movie_id
-    JOIN dim_genre g ON fg.genre_id = g.genre_id
-    WHERE m.revenue > 0
-    GROUP BY g.genre_name
-    ORDER BY total_revenue DESC
-    LIMIT 10
-"""
-df_genre = conn.execute(genre_bar_query).fetchdf()
-
-fig_genre = px.bar(
-    df_genre,
-    x="genre_name",
-    y="total_revenue",
-    color="total_revenue",
-    labels={"genre_name": "Genre", "total_revenue": "Total Revenue (USD)"},
-    color_continuous_scale="Blues"
+# Page configuration
+st.set_page_config(
+    page_title="Movie Database Analytics & Explorer",
+    page_icon="🎬",
+    layout="wide",
 )
-st.plotly_chart(fig_genre, use_container_width=True)
-  
+
+DB_PATH = "movies_warehouse.duckdb"  # Update to your actual file name
+
+
+@st.cache_resource
+def get_duckdb_connection(db_path):
+  """Establish a cached read-only connection to DuckDB."""
+  try:
+    return duckdb.connect(db_path, read_only=True)
+  except Exception as e:
+    return None
+
+
+conn = get_duckdb_connection(DB_PATH)
+
+st.title("🎬 Movie Database Dashboard")
+
+if conn is None:
+  st.error(
+      f"Could not connect to DuckDB at `{DB_PATH}`. Please check your file"
+      " path."
+  )
+else:
+  tables = [
+      "dim_movie",
+      "dim_genre",
+      "dim_date",
+      "dim_production_company",
+      "fact_movie",
+  ]
+
+  # Expanded Sidebar Navigation
+  st.sidebar.header("Navigation")
+  mode = st.sidebar.radio(
+      "Select Mode", ["Browse Tables", "Visualizations", "Custom SQL Query"]
+  )
+
+  # ==========================================
+  # 1. BROWSE TABLES MODE
+  # ==========================================
+  if mode == "Browse Tables":
+    st.sidebar.subheader("Table Selection")
+    selected_table = st.sidebar.selectbox("Choose a table to view", tables)
+    row_limit = st.sidebar.slider(
+        "Rows to display", min_value=10, max_value=300, value=100, step=10
+    )
+
+    if selected_table:
+      total_rows = conn.execute(
+          f"SELECT COUNT(*) FROM {selected_table}"
+      ).fetchone()[0]
+
+      col1, col2 = st.columns(2)
+      with col1:
+        st.subheader(f"Table: `{selected_table}`")
+      with col2:
+        st.metric(label="Total Records", value=f"{total_rows:,}")
+
+      # Fetch and display
+      query = f"SELECT * FROM {selected_table} LIMIT {row_limit}"
+      df = conn.execute(query).fetchdf()
+      st.dataframe(df, use_container_width=True)
+
+      with st.expander("View Table Schema"):
+        schema_df = conn.execute(f"DESCRIBE {selected_table}").fetchdf()
+        st.dataframe(schema_df, use_container_width=True)
+
+  # ==========================================
+  # 2. VISUALIZATIONS MODE
+  # ==========================================
+  elif mode == "Visualizations":
+    st.subheader("📊 Database Visualizations & Analytics")
+    
+    viz_type = st.selectbox(
+        "Select Visual / Analysis",
+        [
+            "Overview: Table Record Counts",
+            "Genre Breakdown (Fact Join)",
+            "Top Production Companies",
+            "Custom Metric Chart",
+        ],
+    )
+
+    st.markdown("---")
+
+    if viz_type == "Overview: Table Record Counts":
+      st.markdown("### Total Records per Table")
+      counts = []
+      for t in tables:
+        cnt = conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+        counts.append({"Table": t, "Record Count": cnt})
+
+      counts_df = pd.DataFrame(counts)
+
+      # Bar chart using Plotly
+      fig = px.bar(
+          counts_df,
+          x="Table",
+          y="Record Count",
+          text="Record Count",
+          color="Table",
+          title="Database Size Distribution",
+      )
+      fig.update_traces(texttemplate="%{text:,}", textposition="outside")
+      st.plotly_chart(fig, use_container_width=True)
+
+    elif viz_type == "Genre Breakdown":
+      st.markdown("### Movie Distribution Across Genres")
+      # Example safe join query assuming standard star schema foreign keys
+      # Adjust column names if your FK/PK names differ (e.g. genre_id)
+      genre_query = """
+                SELECT 
+                    g.genre_name,
+                    count(m.movie_id) as movie_count
+                FROM dim_movie m,
+                UNNEST(m.genre_ids) AS u(genre_id)
+                JOIN dim_genre g ON u.genre_id = g.genre_id
+                GROUP BY g,genre_name
+                ORDER BY movie_count DESC
+            """
+      try:
+        genre_df = conn.execute(genre_query).fetchdf()
+        if not genre_df.empty:
+          fig = px.pie(
+              genre_df,
+              names="genre_name",
+              values="movie_count",
+              title="Top Movie Genres",
+              hole=0.4,
+          )
+          st.plotly_chart(fig, use_container_width=True)
+        else:
+          st.warning(
+              "No data returned. Check if table join columns (`genre_id`)"
+              " match your schema."
+          )
+      except Exception as e:
+        st.error(
+            f"Query Error (Check column names like `genre_id`): `{e}`"
+        )
+
+    elif viz_type == "Top Production Companies":
+      st.markdown("### Production Companies with Most Highly Rated Movies")
+      comp_query = """
+                SELECT 
+                    pc.production_company_name as company_name,
+                    COUNT(dm.movie_id) as movie_count
+                FROM dim_movie dm,
+                UNNEST(dm.production_company_ids) as u(production_company_id) 
+                JOIN dim_production_company pc ON pc.production_company_id = u.production_company_id
+                GROUP BY pc.production_company_name
+                ORDER BY movie_count DESC
+                LIMIT 10;
+            """
+      try:
+        comp_df = conn.execute(comp_query).fetchdf()
+        if not comp_df.empty:
+          fig = px.bar(
+              comp_df,
+              x="movie_count",
+              y="company_name",
+              orientation="h",
+              title="Top 10 Production Companies",
+              labels={
+                  "movie_count": "Number of Movies",
+                  "company_name": "Company",
+              },
+          )
+          fig.update_layout(yaxis={"categoryorder": "total ascending"})
+          st.plotly_chart(fig, use_container_width=True)
+        else:
+          st.warning("No data returned. Check your foreign key names.")
+      except Exception as e:
+        st.error(
+            f"Query Error (Check column names like `company_id`): `{e}`"
+        )
+
+    elif viz_type == "Budget vs Revenue by Genre":
+      st.markdown("### Explore box-office performance, financial returns, and temporal trends")
+      
+      rev_roi_query = """
+          SELECT movie_id, title, dg.genre_name, f.budget, f.revenue, genre_ids, ROUND(f.revenue / NULLIF(f.budget, 0), 2) AS roi
+          FROM dim_movie
+          FULL JOIN fact_movie f USING (movie_id)
+          CROSS JOIN LATERAL unnest(genre_ids) AS t(genre_id)
+          JOIN dim_genre dg ON t.genre_id = dg.genre_id
+          WHERE f.budget > 1000 AND f.revenue > 1000
+          """
+
+      genres = conn.execute(rev_roi_query).fetchdf()
+          
+      all_genres = sorted(genres["genre_name"].unique().tolist())
+
+        # Multi-select filter for specific genres
+      selected_genres = st.multiselect(
+            "Filter by specific genres:",
+            options=all_genres,
+            default=all_genres,  # Selects all genres by default on load
+        )
+      
+      if selected_genres:
+        filtered_genres = genres[genres["genre_name"].isin(selected_genres)]
+      else:
+        filtered_genres = genres.iloc[0:0]  # Empty DataFrame if nothing is selected
+            
+      try:
+        # roi_df = conn.execute(genres).fetchdf()
+            
+        if not genres.empty:
+            fig = px.scatter(
+            filtered_genres,
+            x="budget",
+            y="revenue",
+            color="genre_name",
+            log_x=True,
+            log_y=True,
+            hover_name="title",
+            hover_data=["budget", "revenue", "roi", "genre_name"],
+            labels={
+                "budget": "Production Budget (USD, Log Scale)",
+                "revenue": "Box Office Revenue (USD, Log Scale)",
+                "roi": "ROI Multiplier",
+                "genre_name": "Genre",
+            },
+            title="Movie Budget vs. Revenue by Genre (Log-Log Scale)",
+        )
+
+            fig.update_layout(
+                xaxis=dict(tickprefix="$", dtick=1),
+                yaxis=dict(tickprefix="$", dtick=1),
+                height=700,
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.warning(
+                "No data returned. Check if table join columns (`genre_id`)"
+                " match your schema."
+            )
+      except Exception as e:
+            st.error(
+                f"Query Error (Check column names like `genre_id`): `{e}`"
+            )
+
+
+  # ==========================================
+  # 3. CUSTOM SQL QUERY MODE
+  # ==========================================
+  elif mode == "Custom SQL Query":
+    st.subheader("🛠️ Custom SQL Playground")
+    st.markdown(
+        "Run custom queries joining your dimensions (`dim_movie`, `dim_genre`,"
+        " etc.) with your `fact_movie` table."
+    )
+
+    default_query = (
+        "SELECT f.*, m.title FROM fact_movie f JOIN dim_movie m ON f.movie_id ="
+        " m.movie_id LIMIT 50"
+    )
+    sql_query = st.text_area("Enter SQL Query", value=default_query, height=150)
+
+    if st.button("Execute Query", type="primary"):
+      try:
+        result_df = conn.execute(sql_query).fetchdf()
+        st.success(f"Query executed successfully! Returned {len(result_df)} rows.")
+        st.dataframe(result_df, use_container_width=True)
+      except Exception as e:
+        st.error(f"SQL Error: {e}")
+        
