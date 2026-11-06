@@ -35,7 +35,8 @@ Data Source: TMDB API
 
 # 📊 Visualizing the Database
 Before running main.py, you'll need an API key from TMDB. However, you can explore the db through the streamlit dashboard. You can instantly explore the schema, view database statistics, and interact with financial/rating charts using the built-in Streamlit Dashboard.
-Dependencies: duckdb, pandas, streamlit, plotly, requests
+
+## Dependencies: duckdb, pandas, streamlit, plotly, requests
 
 
 How to run the dashboard (bash):
