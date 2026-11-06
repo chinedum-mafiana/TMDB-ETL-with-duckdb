@@ -12,9 +12,8 @@ It also includes an **interactive Streamlit web application** for browsing table
 tmdb-etl-with-duckdb/
 │
 ├── etl/
-│   ├── extract.py      # Fetches raw data from TMDB API
-│   ├── transform.py    # Cleans and makes transformations idempotent
-│   └── load.py         # Manages DuckDB connection and upserts into data warehouse
+│   ├── extract_and_transform.py        # Fetches raw data from TMDB API, cleans and makes transformations idempotent
+│   └── load.py                         # Manages DuckDB connection and upserts into data warehouse
 │
 ├── streamlit_visualization.py          # Streamlit interactive dashboard & visualization app
 ├── movies_warehouse.duckdb             # Local DuckDB database file
@@ -33,11 +32,15 @@ Visualization & UI: Streamlit & Plotly
 
 Data Source: TMDB API
 
+Dependencies: requests, pandas, duckdb, ratelimit, load_dotenv
+
 # 📊 Visualizing the Database
 Before running main.py, you'll need an API key from TMDB. However, you can explore the db through the streamlit dashboard. You can instantly explore the schema, view database statistics, and interact with financial/rating charts using the built-in Streamlit Dashboard.
 
-## Dependencies: duckdb, pandas, streamlit, plotly, requests
-
+## Dependencies for visualization: 
+```
+pip install duckdb streamlit plotly
+```
 
 How to run the dashboard (bash):
 
