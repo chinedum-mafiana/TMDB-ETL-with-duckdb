@@ -33,12 +33,15 @@ Visualization & UI: Streamlit & Plotly
 
 Data Source: TMDB API
 
-📊 Visualizing the Database
-Anyone cloning this repository can instantly explore the star schema, view database statistics, and interact with financial/rating charts using the built-in Streamlit Dashboard.
+# 📊 Visualizing the Database
+Before running main.py, you'll need an API key from TMDB. However, you can explore the db through the streamlit dashboard. This repository can instantly explore the schema, view database statistics, and interact with financial/rating charts using the built-in Streamlit Dashboard.
 
 How to run the dashboard:
-Bash
+
+```Bash
 streamlit run app.py
+```
+
 What the dashboard includes:
 Schema Architecture: Interactive Mermaid.js Entity-Relationship Diagram (ERD) mapping all table structures (dim_movie, dim_genre, dim_date, dim_production_company, and fact_movie).
 
