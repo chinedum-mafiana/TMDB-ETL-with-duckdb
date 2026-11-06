@@ -45,9 +45,9 @@ streamlit run app.py
 What the dashboard includes:
 Schema Architecture: Interactive Mermaid.js Entity-Relationship Diagram (ERD) mapping all table structures (dim_movie, dim_genre, dim_date, dim_production_company, and fact_movie).
 
-Table Browser: Inspect table rows, counts, and schemas directly from DuckDB.
+## Table Browser: Inspect table rows, counts, and schemas directly from DuckDB.
 
-Visual Analytics:
+## Visual Analytics:
 
 Database Size Distribution: Table record counts.
 
@@ -57,9 +57,10 @@ Budget vs. Revenue (Log-Log Scale): Interactive financial scatter plots by genre
 
 Top Production Companies & Rated Movies: Bar charts highlighting top-performing studios and user ratings.
 
-Custom SQL Playground: Run arbitrary SQL joins and queries directly against the local warehouse from the UI.
+## Custom SQL Playground: Run arbitrary SQL joins and queries directly against the local warehouse from the UI.
 
-🛠️ Roadmap / To-Do
+
+#🛠️ Roadmap / To-Do
 [ ] Add TV Show data ingestion.
 
 [ ] Containerize the workflow using Docker.
