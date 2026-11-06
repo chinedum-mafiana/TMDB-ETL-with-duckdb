@@ -150,6 +150,7 @@ else:
                 "Genre Breakdown",
                 "Top Production Companies",
                 "Budget vs Revenue by Genre",
+                "Top Movies by Rating",
             ],
         )
 
@@ -311,6 +312,52 @@ else:
                 st.error(
                     f"Query Error: `{e}`"
                 )
+
+        elif viz_type == "Top Movies by Rating":
+            st.markdown("### Top Rated Movies based on User Scores")
+            
+            col_ctrl1, col_ctrl2 = st.columns(2)
+            with col_ctrl1:
+                min_votes = st.slider("Minimum Vote Count Threshold", min_value=10, max_value=5000, value=500, step=50)
+            with col_ctrl2:
+                top_n = st.slider("Number of Movies to Display", min_value=5, max_value=50, value=15, step=5)
+            
+            rating_query = f"""
+                SELECT 
+                    m.title,
+                    f.vote_average,
+                    f.vote_count,
+                    f.popularity
+                FROM fact_movie f
+                JOIN dim_movie m ON f.movie_id = m.movie_id
+                WHERE f.vote_count >= {min_votes}
+                ORDER BY f.vote_average DESC, f.vote_count DESC
+                LIMIT {top_n}
+            """
+            
+            try:
+                rating_df = conn.execute(rating_query).fetchdf()
+                if not rating_df.empty:
+                    fig = px.bar(
+                        rating_df,
+                        x="vote_average",
+                        y="title",
+                        orientation="h",
+                        text="vote_average",
+                        hover_data=["vote_count", "popularity"],
+                        title=f"Top {top_n} Highest-Rated Movies (Min. {min_votes:,} Votes)",
+                        labels={"vote_average": "Average Rating", "title": "Movie Title"}
+                    )
+                    fig.update_traces(texttemplate='%{text:.1f}', textposition='outside')
+                    fig.update_layout(yaxis={'categoryorder': 'total ascending'}, height=650)
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    st.markdown("#### Detailed Ratings Table")
+                    st.dataframe(rating_df, use_container_width=True)
+                else:
+                    st.warning("No movies found matching the selected minimum vote count threshold.")
+            except Exception as e:
+                st.error(f"Query Error: `{e}`")
 
     # ==========================================
     # 3. CUSTOM SQL QUERY MODE
